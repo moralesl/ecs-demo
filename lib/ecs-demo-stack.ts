@@ -1,45 +1,48 @@
 import * as cdk from "@aws-cdk/core";
 import * as ec2 from "@aws-cdk/aws-ec2";
 import * as ecs from "@aws-cdk/aws-ecs";
-import * as dynamodb from "@aws-cdk/aws-dynamodb";
+import { DockerImageAsset } from '@aws-cdk/aws-ecr-assets';
 import * as ecs_patterns from "@aws-cdk/aws-ecs-patterns";
 import * as iam from "@aws-cdk/aws-iam";
+import * as path from "path"
 
 class EcsCdkStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const vpc = new ec2.Vpc(this, "quarkus-demo-vpc", {
-      maxAzs: 3
+    const serverImageAsset = new DockerImageAsset(this, 'demo-server-image', {
+      directory: path.join(__dirname, '..', 'server'),
     });
 
-    const table = new dynamodb.Table(this, "Users", {
-      partitionKey: { name: "userId", type: dynamodb.AttributeType.STRING, },
-      tableName: "Users",
-      readCapacity: 1,
-      writeCapacity: 1,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // NOT recommended for production code
+    const vpc = new ec2.Vpc(this, "demo-vpc", {
+      maxAzs: 3,
+      cidr: '10.0.0.0/16',
+      subnetConfiguration: [{
+        name: "Public",
+        subnetType: ec2.SubnetType.PUBLIC
+      }],
+      natGateways: 0
     });
 
-    const cluster = new ecs.Cluster(this, "quarkus-demo-cluster", {
+    const cluster = new ecs.Cluster(this, "demo-cluster", {
       vpc: vpc
     });
 
-    const logging = new ecs.AwsLogDriver({
-      streamPrefix: "quarkus-demo"
-    })
-
-    const taskRole = new iam.Role(this, "quarkus-demo-taskRole", {
-      roleName: "quarkus-demo-taskRole",
+    const taskRole = new iam.Role(this, "demo-taskRole", {
+      roleName: "demo-taskRole",
       assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com")
     });
 
-    const taskDef = new ecs.FargateTaskDefinition(this, "quarkus-demo-taskdef", {
+    const taskDef = new ecs.FargateTaskDefinition(this, "demo-taskdef", {
       taskRole: taskRole
     });
 
-    const container = taskDef.addContainer("quarkus-demo-web", {
-      image: ecs.ContainerImage.fromRegistry("smoell/quarkus_ecs_demo:0.7"),
+    const logging = new ecs.AwsLogDriver({
+      streamPrefix: "demo"
+    })
+
+    const container = taskDef.addContainer("demo-web", {
+      image: ecs.ContainerImage.fromDockerImageAsset(serverImageAsset),
       memoryLimitMiB: 256,
       cpu: 256,
       logging
@@ -51,7 +54,7 @@ class EcsCdkStack extends cdk.Stack {
       protocol: ecs.Protocol.TCP
     });
 
-    const fargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, "quarkus-demo-service", {
+    const fargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, "demo-service", {
       cluster: cluster,
       taskDefinition: taskDef,
       publicLoadBalancer: true,
@@ -66,16 +69,16 @@ class EcsCdkStack extends cdk.Stack {
       scaleOutCooldown: cdk.Duration.seconds(60)
     });
 
-    table.grantReadWriteData(taskRole)
-
     new cdk.CfnOutput(this, "LoadBalancerDNS", { value: fargateService.loadBalancer.loadBalancerDnsName });
+    new cdk.CfnOutput(this, "repositoryArn", { value: serverImageAsset.repository.repositoryArn });
+    new cdk.CfnOutput(this, "imageUri", { value: serverImageAsset.imageUri });
   }
 }
 
 const app = new cdk.App();
 new EcsCdkStack(app, "EcsCdkStack", {
   env: {
-    region: "us-east-1",
+    region: "eu-central-1",
     account: process.env.CDK_DEFAULT_ACCOUNT,
   }
 });
