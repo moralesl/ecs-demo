@@ -73,7 +73,7 @@ class EcsCdkStack extends cdk.Stack {
 const app = new cdk.App();
 new EcsCdkStack(app, "EcsCdkStack", {
   env: {
-    region: "eu-central-1",
+    region: process.env.CDK_DEFAULT_REGION,
     account: process.env.CDK_DEFAULT_ACCOUNT,
   }
 });
