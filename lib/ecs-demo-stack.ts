@@ -15,13 +15,8 @@ class EcsCdkStack extends cdk.Stack {
     });
 
     const vpc = new ec2.Vpc(this, "demo-vpc", {
-      maxAzs: 3,
+      maxAzs: 2,
       cidr: '10.0.0.0/16',
-      subnetConfiguration: [{
-        name: "Public",
-        subnetType: ec2.SubnetType.PUBLIC
-      }],
-      natGateways: 0
     });
 
     const cluster = new ecs.Cluster(this, "demo-cluster", {
