@@ -1,5 +1,5 @@
 # Base image
-FROM node:15
+FROM node:15-alpine
 
 WORKDIR /src/api
 
